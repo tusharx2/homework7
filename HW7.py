@@ -1,13 +1,14 @@
 
-# Your name:
+# Your name: Tushar Chittala
 # Your student id:
-# Your email:
+# Your email: chittala@umich.edu
 # List who you have worked with on this project:
 
 import unittest
 import sqlite3
 import json
 import os
+from datetime import datetime
 
 def read_data(filename):
     full_path = os.path.join(os.path.dirname(__file__), filename)
@@ -53,6 +54,26 @@ def make_positions_table(data, cur, conn):
 #     created for you -- see make_positions_table above for details.
 
 def make_players_table(data, cur, conn):
+
+    # load positions into a dictionary for faster lookup
+    positions = {}
+    cur.execute("SELECT id, position FROM Positions")
+    rows = cur.fetchall()
+    for row in rows:
+        positions[row[1]] = row[0]
+        
+    # iterate through the squad and insert players into the database
+    for player in data['squad']:
+        name = player['name']
+        position = player['position']
+        birthyear = int(player['dateOfBirth'][:4])
+        nationality = player['nationality']
+        position_id = positions.get(position, None)
+        if position_id is not None:
+            cur.execute("INSERT OR IGNORE INTO Players (id, name, position_id, birthyear, nationality) VALUES (?, ?, ?, ?, ?)", 
+                        (player['id'], name, position_id, birthyear, nationality))
+    
+    conn.commit()
     pass
 
 ## [TASK 2]: 10 points
@@ -66,6 +87,15 @@ def make_players_table(data, cur, conn):
         # the player's name, their position_id, and their nationality.
 
 def nationality_search(countries, cur, conn):
+    
+    query = """
+        SELECT player_name, position_id, nationality
+        FROM Player
+        WHERE nationality IN ({})
+    """.format(",".join(["?"]*len(countries)))
+    cur.execute(query, countries)
+    return cur.fetchall()
+
     pass
 
 ## [TASK 3]: 10 points
@@ -85,7 +115,21 @@ def nationality_search(countries, cur, conn):
 
 
 def birthyear_nationality_search(age, country, cur, conn):
-    pass
+
+    # Calculate the birth year
+    current_year = datetime.now().year
+    birth_year = current_year - age
+
+    # Perform SQL query
+    query = """
+        SELECT name, nationality, birth_year
+        FROM players
+        WHERE country = ? AND birth_year < ?
+    """
+    cur.execute(query, (country, birth_year))
+    results = cur.fetchall()
+
+    return results
 
 ## [TASK 4]: 15 points
 # finish the function position_birth_search
@@ -105,7 +149,24 @@ def birthyear_nationality_search(age, country, cur, conn):
     # HINT: You'll have to use JOIN for this task.
 
 def position_birth_search(position, age, cur, conn):
-       pass
+
+    # Calculate birth year
+    birth_year = 2023 - age
+
+    # Join tables and select players who play the position and were born after birth_year
+    cur.execute("""
+        SELECT player.name, position.name, player.birth_year
+        FROM player
+        JOIN position
+        ON player.position_id = position.id
+        WHERE position.name = %s AND player.birth_year > %s
+    """, (position, birth_year))
+
+    # Return list of tuples containing player's name, position, and birth year
+    return cur.fetchall()
+    
+
+    pass
 
 
 # [EXTRA CREDIT]
